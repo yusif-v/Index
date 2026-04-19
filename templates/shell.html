@@ -1,68 +1,88 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>{{PAGE_TITLE}}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ROOT}}/css/style.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-</head>
-<body>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>{{PAGE_TITLE}}</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+            href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="stylesheet" href="{{ROOT}}/css/style.css" />
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"
+        />
+    </head>
+    <body>
+        <!-- Window Chrome -->
+        <div class="window-bar">
+            <div class="window-dot dot-red"></div>
+            <div class="window-dot dot-yellow"></div>
+            <div class="window-dot dot-green"></div>
+            <div class="window-title">lizard@web — zsh — 80×24</div>
+            <div class="window-spacer"></div>
+        </div>
 
-  <!-- Window Chrome -->
-  <div class="window-bar">
-    <div class="window-dot dot-red"></div>
-    <div class="window-dot dot-yellow"></div>
-    <div class="window-dot dot-green"></div>
-    <div class="window-title">yusif@web — bash — 80×24</div>
-    <div class="window-spacer"></div>
-  </div>
+        <div class="shell">
+            <!-- Nav -->
+            <nav class="nav">
+                <span class="nav-prompt">lizard@web:~$</span>
+                <span class="nav-cmd">ls</span>
+                <a href="{{ROOT}}/index.html" class="{{NAV_BLOG}}">~/blog</a>
+                <span class="nav-sep">|</span>
+                <a href="{{ROOT}}/about.html" class="{{NAV_ABOUT}}">~/about</a>
+                <span class="nav-sep">|</span>
+                <a href="{{ROOT}}/projects.html" class="{{NAV_PROJECTS}}"
+                    >~/projects</a
+                >
+                <span class="nav-sep">|</span>
+                <a href="https://github.com/yusif-v" target="_blank"
+                    >~/github</a
+                >
+            </nav>
 
-  <div class="shell">
+            {{CONTENT}}
 
-    <!-- Nav -->
-    <nav class="nav">
-      <span class="nav-prompt">yusif@web:~$</span>
-      <span class="nav-cmd">ls</span>
-      <a href="{{ROOT}}/index.html" class="{{NAV_BLOG}}">~/blog</a>
-      <span class="nav-sep">|</span>
-      <a href="{{ROOT}}/about.html" class="{{NAV_ABOUT}}">~/about</a>
-      <span class="nav-sep">|</span>
-      <a href="{{ROOT}}/projects.html" class="{{NAV_PROJECTS}}">~/projects</a>
-      <span class="nav-sep">|</span>
-      <a href="https://github.com/yusif-v" target="_blank">~/github</a>
-    </nav>
+            <!-- Footer -->
+            <footer class="footer">
+                <div class="footer-links">
+                    <a href="https://github.com/yusif-v" target="_blank"
+                        >GitHub</a
+                    >
+                    <a href="{{ROOT}}/about.html">About</a>
+                </div>
+                <div>
+                    &copy; 2026 Lizard &mdash; built with markdown &amp; GitHub
+                    Actions
+                </div>
+                <div class="footer-ascii">EOF</div>
+            </footer>
+        </div>
 
-    {{CONTENT}}
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <span
+                ><span class="status-mode">NORMAL</span>
+                &nbsp;{{STATUS_FILE}}</span
+            >
+            <span id="status-info">utf-8 | html | 0%</span>
+        </div>
 
-    <!-- Footer -->
-    <footer class="footer">
-      <div class="footer-links">
-        <a href="https://github.com/yusif-v" target="_blank">GitHub</a>
-        <a href="{{ROOT}}/about.html">About</a>
-      </div>
-      <div>&copy; 2026 yusif &mdash; built with markdown &amp; GitHub Actions</div>
-      <div class="footer-ascii">EOF</div>
-    </footer>
-
-  </div>
-
-  <!-- Status Bar -->
-  <div class="status-bar">
-    <span><span class="status-mode">NORMAL</span> &nbsp;{{STATUS_FILE}}</span>
-    <span id="status-info">utf-8 | html | 0%</span>
-  </div>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-  <script>
-    hljs.highlightAll();
-    window.addEventListener('scroll', () => {
-      const pct = Math.round((window.scrollY / (document.body.scrollHeight - window.innerHeight)) * 100) || 0;
-      document.getElementById('status-info').textContent = 'utf-8 | html | ' + pct + '%';
-    });
-  </script>
-
-</body>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+        <script>
+            hljs.highlightAll();
+            window.addEventListener("scroll", () => {
+                const pct =
+                    Math.round(
+                        (window.scrollY /
+                            (document.body.scrollHeight - window.innerHeight)) *
+                            100,
+                    ) || 0;
+                document.getElementById("status-info").textContent =
+                    "utf-8 | html | " + pct + "%";
+            });
+        </script>
+    </body>
 </html>

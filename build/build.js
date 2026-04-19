@@ -212,7 +212,7 @@ function wrapShell(content, options = {}) {
   const root = options.root || ".";
   return shell
     .replace(/\{\{CONTENT\}\}/g, content)
-    .replace(/\{\{PAGE_TITLE\}\}/g, options.title || "yusif@web:~$")
+    .replace(/\{\{PAGE_TITLE\}\}/g, options.title || "lizard@web:~$")
     .replace(/\{\{ROOT\}\}/g, root)
     .replace(/\{\{NAV_BLOG\}\}/g, options.nav === "blog" ? "active" : "")
     .replace(/\{\{NAV_ABOUT\}\}/g, options.nav === "about" ? "active" : "")
@@ -300,7 +300,7 @@ function build() {
       .replace(/\{\{ROOT\}\}/g, "..");
 
     const page = wrapShell(content, {
-      title: `${post.title} — yusif@web`,
+      title: `${post.title} — lizard@web`,
       nav: "blog",
       root: "..",
       statusFile: `posts/${post.slug}.md`,
@@ -340,7 +340,7 @@ function build() {
 
   const homeContent = homeTemplate.replace("{{POST_LIST}}", postListHtml);
   const homePage = wrapShell(homeContent, {
-    title: "yusif@web:~$ — blog",
+    title: "lizard@web:~$ — blog",
     nav: "blog",
     root: ".",
     statusFile: "index.html",
@@ -356,7 +356,7 @@ function build() {
 
   const aboutContent = aboutTemplate.replace("{{ABOUT_BODY}}", aboutHtml);
   const aboutPage = wrapShell(aboutContent, {
-    title: "About — yusif@web",
+    title: "About — lizard@web",
     nav: "about",
     root: ".",
     statusFile: "about.html",
@@ -378,7 +378,7 @@ function build() {
     projectsHtml,
   );
   const projectsPage = wrapShell(projectsContent, {
-    title: "Projects — yusif@web",
+    title: "Projects — lizard@web",
     nav: "projects",
     root: ".",
     statusFile: "projects.html",
