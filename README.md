@@ -1,4 +1,4 @@
-# yusif@web — Terminal Blog
+# lizard@web — Terminal Blog
 
 A static blog with a terminal aesthetic, powered by markdown and GitHub Actions.
 
