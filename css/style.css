@@ -539,9 +539,12 @@ a:hover {
 /* === POST LAYOUT WITH TOC === */
 .post-layout {
     display: grid;
-    grid-template-columns: 1fr 200px;
-    gap: 2rem;
+    grid-template-columns: 1fr 220px;
+    gap: 1.5rem;
     align-items: start;
+}
+.post-layout .post-body {
+    min-width: 0;
 }
 
 .toc {
@@ -599,8 +602,8 @@ a:hover {
     font-size: 11px;
 }
 
-/* Hide TOC on narrow screens, show full-width post */
-@media (max-width: 900px) {
+/* Hide TOC sidebar on narrow screens */
+@media (max-width: 768px) {
     .post-layout {
         grid-template-columns: 1fr;
     }
