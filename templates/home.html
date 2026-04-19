@@ -1,21 +1,25 @@
 <!-- Hero -->
-<section class="hero">
-    <div class="hero-line">
-        <span class="prompt">lizard@web:~$</span>
-        <span class="cmd">whoami</span>
-    </div>
-    <div class="hero-line output">lizard</div>
-    <div class="hero-line">
-        <span class="prompt">lizard@web:~$</span> <span class="cmd">ls</span>
-        <span class="flag">blog/</span>
-        <span class="comment"># latest posts ↓</span
-        ><span class="cursor"></span>
-    </div>
-</section>
+    <section class="hero">
+      <div class="hero-line">
+        <span class="prompt">lizard@web:~$</span> <span class="cmd">whoami</span>
+      </div>
+      <div class="hero-line output">
+        lizard
+      </div>
+      <div class="hero-line">
+        <span class="prompt">lizard@web:~$</span> <span class="cmd">cat</span> <span class="flag">/etc/role</span>
+      </div>
+      <div class="hero-line output">
+        Cybersecurity Engineer <span class="comment">&amp;</span> Researcher
+      </div>
+      <div class="hero-line">
+        <span class="prompt">lizard@web:~$</span> <span class="cmd">ls</span> <span class="flag">blog/</span> <span class="comment"># latest posts ↓</span><span class="cursor"></span>
+      </div>
+    </section>
 
-<!-- Blog Posts -->
-<section class="section">
-    <ul class="post-list">
+    <!-- Blog Posts -->
+    <section class="section">
+      <ul class="post-list">
         {{POST_LIST}}
-    </ul>
-</section>
+      </ul>
+    </section>
