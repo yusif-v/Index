@@ -21,7 +21,7 @@
             <div class="window-dot dot-red"></div>
             <div class="window-dot dot-yellow"></div>
             <div class="window-dot dot-green"></div>
-            <div class="window-title">lizard@web — zsh — 80×24</div>
+            <div class="window-title">lizard@web — bash — 80×24</div>
             <div class="window-spacer"></div>
         </div>
 
@@ -54,7 +54,7 @@
                     <a href="{{ROOT}}/about.html">About</a>
                 </div>
                 <div>
-                    &copy; 2026 Lizard &mdash; built with markdown &amp; GitHub
+                    &copy; 2026 lizard &mdash; built with markdown &amp; GitHub
                     Actions
                 </div>
                 <div class="footer-ascii">EOF</div>
@@ -82,6 +82,25 @@
                     ) || 0;
                 document.getElementById("status-info").textContent =
                     "utf-8 | html | " + pct + "%";
+
+                // TOC scroll spy
+                const tocLinks = document.querySelectorAll(".toc-list a");
+                if (tocLinks.length === 0) return;
+                const headings = document.querySelectorAll(
+                    ".post-body h2[id], .post-body h3[id]",
+                );
+                let current = "";
+                for (const h of headings) {
+                    if (h.getBoundingClientRect().top <= 80) {
+                        current = h.id;
+                    }
+                }
+                tocLinks.forEach((a) => {
+                    a.classList.toggle(
+                        "active",
+                        a.getAttribute("href") === "#" + current,
+                    );
+                });
             });
         </script>
     </body>

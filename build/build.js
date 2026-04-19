@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * build.js — Static site generator for yusif@web terminal blog
+ * build.js — Static site generator for lizard@web terminal blog
  *
  * Reads markdown posts from /posts, pages from /pages,
  * converts them to HTML with syntax highlighting support,
@@ -88,11 +88,16 @@ function markdownToHtml(md) {
   // Links [text](url)
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
 
-  // Headings
-  html = html.replace(/^#### (.+)$/gm, "<h4>$1</h4>");
-  html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
-  html = html.replace(/^## (.+)$/gm, "<h2>$1</h2>");
-  html = html.replace(/^# (.+)$/gm, "<h1>$1</h1>");
+  // Headings — add id attributes for TOC linking
+  html = html.replace(/^(#{1,4}) (.+)$/gm, (match, hashes, text) => {
+    const level = hashes.length;
+    const id = text
+      .toLowerCase()
+      .replace(/<[^>]*>/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+    return `<h${level} id="${id}">${text}</h${level}>`;
+  });
 
   // Horizontal rules
   html = html.replace(/^---$/gm, "<hr>");
@@ -166,6 +171,49 @@ function markdownToHtml(md) {
     .join("\n\n");
 
   return html;
+}
+
+/** Extract headings from markdown and generate TOC HTML */
+function generateToc(markdown) {
+  const headings = [];
+  const lines = markdown.split("\n");
+
+  let inCodeBlock = false;
+  for (const line of lines) {
+    if (line.trim().startsWith("```")) {
+      inCodeBlock = !inCodeBlock;
+      continue;
+    }
+    if (inCodeBlock) continue;
+
+    const match = line.match(/^(#{2,3}) (.+)$/);
+    if (match) {
+      const level = match[1].length;
+      const text = match[2].trim();
+      const id = text
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+      headings.push({ level, text, id });
+    }
+  }
+
+  if (headings.length < 2) return "";
+
+  const items = headings
+    .map((h) => {
+      const cls = h.level === 3 ? ' class="toc-h3"' : "";
+      return `          <li${cls}><a href="#${h.id}">${h.text}</a></li>`;
+    })
+    .join("\n");
+
+  return `
+        <nav class="toc">
+          <div class="toc-title">Contents</div>
+          <ul class="toc-list">
+${items}
+          </ul>
+        </nav>`;
 }
 
 function escapeHtml(str) {
@@ -288,6 +336,9 @@ function build() {
     // Resolve Obsidian wikilinks
     bodyHtml = resolveWikilinks(bodyHtml, allSlugs);
 
+    // Generate TOC from original markdown
+    const tocHtml = generateToc(post.body);
+
     const tagsHtml = post.tags
       .map((t) => `<span class="post-tag">${t}</span>`)
       .join("\n        ");
@@ -297,6 +348,7 @@ function build() {
       .replace(/\{\{DATE\}\}/g, post.date)
       .replace(/\{\{TAGS_HTML\}\}/g, tagsHtml)
       .replace(/\{\{BODY\}\}/g, bodyHtml)
+      .replace(/\{\{TOC\}\}/g, tocHtml)
       .replace(/\{\{ROOT\}\}/g, "..");
 
     const page = wrapShell(content, {
