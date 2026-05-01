@@ -27,6 +27,17 @@ const SITE_DESCRIPTION =
   "Notes from a cybersecurity engineer — offensive, defensive, and the messy middle.";
 const SITE_AUTHOR = "lizard";
 
+// ─── HTB writeup config ────────────────────────────────────────
+// Maps the `difficulty` frontmatter value to a 5-dot rank + theme color.
+// Color escalates with rank; dots render as ● (filled) / ○ (empty).
+const HTB_DIFFICULTY = {
+  "very-easy": { rank: 1, color: "green" },
+  easy: { rank: 2, color: "cyan" },
+  medium: { rank: 3, color: "yellow" },
+  hard: { rank: 4, color: "orange" },
+  insane: { rank: 5, color: "red" },
+};
+
 // ─── Helpers ──────────────────────────────────────────────────
 
 /** Parse YAML-ish frontmatter from markdown string */
@@ -318,6 +329,7 @@ function wrapShell(content, options = {}) {
     .replace(/\{\{OG_TYPE\}\}/g, ogType)
     .replace(/\{\{ROOT\}\}/g, root)
     .replace(/\{\{NAV_BLOG\}\}/g, options.nav === "blog" ? "active" : "")
+    .replace(/\{\{NAV_CTF\}\}/g, options.nav === "ctf" ? "active" : "")
     .replace(/\{\{NAV_ABOUT\}\}/g, options.nav === "about" ? "active" : "")
     .replace(
       /\{\{NAV_PROJECTS\}\}/g,
@@ -363,6 +375,7 @@ function buildSitemap(posts) {
   const today = new Date().toISOString().slice(0, 10);
   const urls = [
     { loc: `${SITE_URL}/`, lastmod: today, priority: "1.0" },
+    { loc: `${SITE_URL}/ctf.html`, lastmod: today, priority: "0.7" },
     { loc: `${SITE_URL}/about.html`, lastmod: today, priority: "0.6" },
     { loc: `${SITE_URL}/projects.html`, lastmod: today, priority: "0.6" },
     ...posts.map((p) => ({
@@ -381,6 +394,118 @@ ${urls
   .join("\n")}
 </urlset>
 `;
+}
+
+// ─── HTB writeup rendering ────────────────────────────────────
+
+/** Difficulty as 5 colored dots + label, e.g. ●●○○○ medium (yellow) */
+function renderDifficulty(level) {
+  const spec = HTB_DIFFICULTY[level];
+  if (!spec) return escapeHtml(level || "");
+  const filled = "●".repeat(spec.rank);
+  const empty = "○".repeat(5 - spec.rank);
+  return (
+    `<span class="htb-dots htb-${spec.color}">` +
+    `<span class="htb-dots-filled">${filled}</span>` +
+    `<span class="htb-dots-empty">${empty}</span>` +
+    `</span> <span class="htb-diff-label">${escapeHtml(level)}</span>`
+  );
+}
+
+/** Render a list of values as labeled pills */
+function renderPillRow(label, values, kind) {
+  if (!values || !values.length) return "";
+  const pills = values
+    .map((v) => `<span class="htb-pill htb-pill-${kind}">${escapeHtml(v)}</span>`)
+    .join("");
+  return `      <div class="htb-pill-row"><span class="htb-key">${label}</span><span class="htb-val">${pills}</span></div>`;
+}
+
+/** Render a single key/value row in the box-info card */
+function renderInfoRow(key, valueHtml) {
+  if (valueHtml === undefined || valueHtml === null || valueHtml === "")
+    return "";
+  return `      <div class="htb-row"><span class="htb-key">${key}</span><span class="htb-val">${valueHtml}</span></div>`;
+}
+
+/** The dmesg-style box-info card injected at the top of HTB writeups */
+function renderHtbCard(post) {
+  const rows = [
+    renderInfoRow("box", `<span class="htb-box-name">${escapeHtml(post.box || post.title)}</span>`),
+    renderInfoRow(
+      "os",
+      post.os
+        ? `<span class="htb-os htb-os-${escapeHtml(post.os)}">${escapeHtml(post.os)}</span>`
+        : "",
+    ),
+    renderInfoRow("difficulty", post.difficulty ? renderDifficulty(post.difficulty) : ""),
+    renderInfoRow("points", escapeHtml(post.points || "")),
+    renderInfoRow("released", escapeHtml(post.released || "")),
+    renderInfoRow("retired", escapeHtml(post.retired || "")),
+    renderInfoRow(
+      "makers",
+      post.makers && post.makers.length
+        ? post.makers.map((m) => escapeHtml(m)).join(", ")
+        : "",
+    ),
+    renderInfoRow("ip", post.ip ? `<code>${escapeHtml(post.ip)}</code>` : ""),
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const pillRows = [
+    renderPillRow("tools", post.tools, "tool"),
+    renderPillRow("cves", post.cves, "cve"),
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return `<aside class="htb-card" aria-label="box info">
+  <div class="htb-card-head">
+    <span class="prompt">$</span>
+    <span class="cmd">cat</span>
+    <span class="flag">box.info</span>
+  </div>
+  <div class="htb-card-body">
+${rows}
+${pillRows ? `      <div class="htb-divider" aria-hidden="true"></div>\n${pillRows}` : ""}
+  </div>
+</aside>
+`;
+}
+
+/** Render a `<li class="post-item">` list. `root` is the relative path
+ *  from the listing page back to the site root (`.` for /index.html). */
+function renderPostList(posts, root) {
+  return posts
+    .map((post) => {
+      const tagsHtml = post.tags
+        .map((t) => `<span class="post-tag">${escapeHtml(t)}</span>`)
+        .join("\n                ");
+      const chip = renderHtbChip(post);
+      return `
+          <li class="post-item">
+            <a class="post-link" href="${root}/posts/${post.slug}.html">
+              <div class="post-meta">
+                <span class="post-date">${post.date}</span>
+                ${chip}
+                ${tagsHtml}
+              </div>
+              <div class="post-title">${escapeHtml(post.title)}</div>
+              <div class="post-excerpt">${escapeHtml(post.excerpt)}</div>
+            </a>
+          </li>`;
+    })
+    .join("\n");
+}
+
+/** Compact chip shown next to the date on listings — `[HTB · easy · linux]` */
+function renderHtbChip(post) {
+  if (post.type !== "htb") return "";
+  const spec = HTB_DIFFICULTY[post.difficulty];
+  const color = spec ? `htb-${spec.color}` : "";
+  const parts = ["HTB", post.difficulty, post.os].filter(Boolean);
+  return `<span class="htb-chip ${color}">[${parts.map(escapeHtml).join(" · ")}]</span>`;
 }
 
 // ─── Build ────────────────────────────────────────────────────
@@ -411,13 +536,26 @@ function build() {
       .basename(filename, ".md")
       .toLowerCase()
       .replace(/\s+/g, "-");
+    const asArr = (v) => (Array.isArray(v) ? v : v ? [v] : []);
     return {
       slug,
       title: meta.title || slug,
       date: meta.date || "1970-01-01",
-      tags: Array.isArray(meta.tags) ? meta.tags : meta.tags ? [meta.tags] : [],
+      tags: asArr(meta.tags),
       excerpt: meta.excerpt || "",
       draft: meta.draft === "true" || meta.draft === true,
+      // HTB-writeup frontmatter (only used when type === "htb")
+      type: meta.type || "post",
+      box: meta.box || "",
+      os: meta.os || "",
+      difficulty: meta.difficulty || "",
+      points: meta.points || "",
+      released: meta.released || "",
+      retired: meta.retired || "",
+      makers: asArr(meta.makers),
+      ip: meta.ip || "",
+      tools: asArr(meta.tools),
+      cves: asArr(meta.cves),
       body,
     };
   });
@@ -458,6 +596,11 @@ function build() {
     // Resolve Obsidian wikilinks
     bodyHtml = resolveWikilinks(bodyHtml, titleIndex);
 
+    // HTB writeup: inject the box-info card at the top
+    if (post.type === "htb") {
+      bodyHtml = renderHtbCard(post) + bodyHtml;
+    }
+
     // Generate TOC from original markdown
     const tocHtml = generateToc(post.body);
 
@@ -496,24 +639,7 @@ function build() {
     postListHtml =
       '<li class="post-no-results"><span class="prompt">$</span> No posts yet. Check back soon.</li>';
   } else {
-    postListHtml = publishedPosts
-      .map((post) => {
-        const tagsHtml = post.tags
-          .map((t) => `<span class="post-tag">${t}</span>`)
-          .join("\n                ");
-        return `
-          <li class="post-item">
-            <a class="post-link" href="./posts/${post.slug}.html">
-              <div class="post-meta">
-                <span class="post-date">${post.date}</span>
-                ${tagsHtml}
-              </div>
-              <div class="post-title">${post.title}</div>
-              <div class="post-excerpt">${post.excerpt}</div>
-            </a>
-          </li>`;
-      })
-      .join("\n");
+    postListHtml = renderPostList(publishedPosts, ".");
   }
 
   const homeContent = homeTemplate.replace("{{POST_LIST}}", postListHtml);
@@ -569,6 +695,27 @@ function build() {
   });
   fs.writeFileSync(path.join(DIST_DIR, "projects.html"), projectsPage);
   console.log("  ✓ projects.html");
+
+  // ── CTF index page (HTB writeups only) ─────────────────
+  const htbPosts = publishedPosts.filter((p) => p.type === "htb");
+  const ctfTemplate = readTemplate("ctf.html");
+  const ctfList =
+    htbPosts.length === 0
+      ? '<li class="post-no-results"><span class="prompt">$</span> No writeups yet.</li>'
+      : renderPostList(htbPosts, ".");
+  const ctfContent = ctfTemplate
+    .replace("{{CTF_LIST}}", ctfList)
+    .replace("{{CTF_COUNT}}", String(htbPosts.length));
+  const ctfPage = wrapShell(ctfContent, {
+    title: `Writeups — ${SITE_TITLE}`,
+    description: `HackTheBox writeups by ${SITE_AUTHOR}.`,
+    canonical: `${SITE_URL}/ctf.html`,
+    nav: "ctf",
+    root: ".",
+    statusFile: "ctf.html",
+  });
+  fs.writeFileSync(path.join(DIST_DIR, "ctf.html"), ctfPage);
+  console.log(`  ✓ ctf.html (${htbPosts.length} writeup${htbPosts.length === 1 ? "" : "s"})`);
 
   // ── Feeds & discovery ──────────────────────────────────
   fs.writeFileSync(path.join(DIST_DIR, "feed.xml"), buildRss(publishedPosts));

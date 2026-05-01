@@ -737,6 +737,177 @@ a:hover {
     }
 }
 
+/* === HTB WRITEUP CARD ===
+   Rendered at the top of any post with `type: htb` in frontmatter.
+   Visually it reads like a literal `cat box.info` — header line,
+   key/value rows, then divider + tools/cves pill rows. */
+.htb-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 6px;
+    padding: 1rem 1.2rem 1.2rem;
+    margin-bottom: 2rem;
+    font-size: 13px;
+}
+.htb-card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding-bottom: 0.6rem;
+    margin-bottom: 0.8rem;
+    border-bottom: 1px dashed var(--border);
+}
+.htb-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+.htb-row,
+.htb-pill-row {
+    display: grid;
+    grid-template-columns: 7rem 1fr;
+    align-items: baseline;
+    gap: 0.6rem;
+    line-height: 1.6;
+}
+.htb-pill-row {
+    align-items: center;
+    margin-top: 0.2rem;
+}
+.htb-key {
+    color: var(--text-dim);
+    text-transform: lowercase;
+    letter-spacing: 0.5px;
+}
+.htb-key::before {
+    content: "├─ ";
+    color: var(--text-mute);
+}
+.htb-row:last-of-type .htb-key::before {
+    content: "└─ ";
+}
+.htb-val {
+    color: var(--text);
+}
+.htb-box-name {
+    color: #fff;
+    font-weight: 700;
+    font-size: 15px;
+}
+.htb-os {
+    text-transform: lowercase;
+    font-weight: 500;
+}
+.htb-os-linux {
+    color: var(--green);
+}
+.htb-os-windows {
+    color: var(--blue);
+}
+.htb-os-other {
+    color: var(--purple);
+}
+.htb-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 0.7rem 0 0.4rem;
+    grid-column: 1 / -1;
+}
+
+/* Difficulty dots */
+.htb-dots {
+    letter-spacing: 2px;
+    margin-right: 0.5rem;
+}
+.htb-dots-empty {
+    color: var(--text-mute);
+    opacity: 0.5;
+}
+.htb-green .htb-dots-filled {
+    color: var(--green);
+    text-shadow: 0 0 6px var(--green-glow);
+}
+.htb-cyan .htb-dots-filled {
+    color: var(--cyan);
+}
+.htb-yellow .htb-dots-filled {
+    color: var(--yellow);
+}
+.htb-orange .htb-dots-filled {
+    color: var(--orange);
+}
+.htb-red .htb-dots-filled {
+    color: var(--red);
+}
+.htb-diff-label {
+    text-transform: lowercase;
+    color: var(--text-dim);
+}
+
+/* Tools / CVE pills */
+.htb-pill {
+    display: inline-block;
+    padding: 0.1rem 0.55rem;
+    border-radius: 3px;
+    font-size: 11px;
+    margin-right: 0.35rem;
+    margin-bottom: 0.25rem;
+    border: 1px solid transparent;
+}
+.htb-pill-tool {
+    color: var(--blue);
+    background: rgba(102, 217, 239, 0.08);
+    border-color: rgba(102, 217, 239, 0.18);
+}
+.htb-pill-cve {
+    color: var(--red);
+    background: rgba(249, 38, 114, 0.08);
+    border-color: rgba(249, 38, 114, 0.2);
+    font-weight: 500;
+    letter-spacing: 0.3px;
+}
+
+/* Inline listing chip (home + ctf index) */
+.htb-chip {
+    font-size: 11px;
+    color: var(--green);
+    background: rgba(0, 255, 156, 0.06);
+    border: 1px solid rgba(0, 255, 156, 0.2);
+    padding: 0.05rem 0.45rem;
+    border-radius: 3px;
+    text-transform: lowercase;
+    letter-spacing: 0.4px;
+}
+.htb-chip.htb-cyan {
+    color: var(--cyan);
+    background: rgba(57, 197, 207, 0.06);
+    border-color: rgba(57, 197, 207, 0.25);
+}
+.htb-chip.htb-yellow {
+    color: var(--yellow);
+    background: rgba(230, 219, 116, 0.06);
+    border-color: rgba(230, 219, 116, 0.25);
+}
+.htb-chip.htb-orange {
+    color: var(--orange);
+    background: rgba(253, 151, 31, 0.06);
+    border-color: rgba(253, 151, 31, 0.25);
+}
+.htb-chip.htb-red {
+    color: var(--red);
+    background: rgba(249, 38, 114, 0.06);
+    border-color: rgba(249, 38, 114, 0.25);
+}
+
+@media (max-width: 600px) {
+    .htb-row,
+    .htb-pill-row {
+        grid-template-columns: 5.5rem 1fr;
+        gap: 0.4rem;
+    }
+}
+
 /* === RESPONSIVE === */
 @media (max-width: 600px) {
     body {
