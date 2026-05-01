@@ -21,6 +21,12 @@ const CSS_DIR = path.join(ROOT_DIR, "css");
 const STATIC_DIR = path.join(ROOT_DIR, "static");
 const DIST_DIR = path.join(ROOT_DIR, "dist");
 
+const SITE_URL = "https://yusif-v.github.io/Index";
+const SITE_TITLE = "lizard@web";
+const SITE_DESCRIPTION =
+  "Notes from a cybersecurity engineer — offensive, defensive, and the messy middle.";
+const SITE_AUTHOR = "lizard";
+
 // ─── Helpers ──────────────────────────────────────────────────
 
 /** Parse YAML-ish frontmatter from markdown string */
@@ -47,19 +53,20 @@ function parseFrontmatter(content) {
   return { meta, body: match[2] };
 }
 
-/** Convert Obsidian [[wikilinks]] to HTML links */
-function resolveWikilinks(html, allSlugs) {
-  // [[Page Name]] → link to post if it exists
-  // [[Page Name|Display Text]] → link with custom text
+/** Convert Obsidian [[wikilinks]] to HTML links.
+ *  Resolution order: exact title match → slugified-title match → filename slug.
+ *  This way `[[My Post Title]]` resolves regardless of how the file is named. */
+function resolveWikilinks(html, titleIndex) {
   return html.replace(
     /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,
     (match, target, display) => {
-      const slug = slugify(target.trim());
-      const text = display ? display.trim() : target.trim();
-      if (allSlugs.includes(slug)) {
-        return `<a href="./posts/${slug}.html">${text}</a>`;
-      }
-      // If no matching post, render as plain text with a dim style
+      const key = target.trim();
+      const text = display ? display.trim() : key;
+      const slug =
+        titleIndex.byTitle[key] ||
+        titleIndex.bySlugifiedTitle[slugify(key)] ||
+        (titleIndex.bySlug[slugify(key)] ? slugify(key) : null);
+      if (slug) return `<a href="./posts/${slug}.html">${text}</a>`;
       return `<span class="comment">${text}</span>`;
     },
   );
@@ -115,14 +122,45 @@ function markdownToHtml(md) {
   // Strikethrough
   html = html.replace(/~~(.+?)~~/g, "<del>$1</del>");
 
-  // Unordered lists
-  html = html.replace(/^(\s*)[-*+] (.+)$/gm, (match, indent, content) => {
-    return `<li>${content}</li>`;
-  });
-  html = html.replace(/((?:<li>.*<\/li>\s*)+)/g, "<ul>$1</ul>");
-
-  // Ordered lists
-  html = html.replace(/^\d+\. (.+)$/gm, "<li>$1</li>");
+  // Lists — group consecutive lines into <ul> or <ol> based on the marker.
+  // Walk line-by-line so a `- ` block and a `1. ` block don't bleed together.
+  {
+    const lines = html.split("\n");
+    const out = [];
+    let kind = null; // "ul" | "ol" | null
+    const flush = () => {
+      if (kind) {
+        out[out.length - 1] = `<${kind}>\n${out[out.length - 1]}\n</${kind}>`;
+        kind = null;
+      }
+    };
+    for (const line of lines) {
+      const ul = line.match(/^\s*[-*+] (.+)$/);
+      const ol = line.match(/^\s*\d+\. (.+)$/);
+      if (ul) {
+        if (kind && kind !== "ul") flush();
+        if (kind === "ul") {
+          out[out.length - 1] += `\n<li>${ul[1]}</li>`;
+        } else {
+          kind = "ul";
+          out.push(`<li>${ul[1]}</li>`);
+        }
+      } else if (ol) {
+        if (kind && kind !== "ol") flush();
+        if (kind === "ol") {
+          out[out.length - 1] += `\n<li>${ol[1]}</li>`;
+        } else {
+          kind = "ol";
+          out.push(`<li>${ol[1]}</li>`);
+        }
+      } else {
+        flush();
+        out.push(line);
+      }
+    }
+    flush();
+    html = out.join("\n");
+  }
 
   // Tables
   html = html.replace(
@@ -221,7 +259,16 @@ function escapeHtml(str) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** Strip HTML tags and collapse whitespace — for meta descriptions */
+function stripHtml(html) {
+  return html
+    .replace(/<[^>]+>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function slugify(name) {
@@ -258,9 +305,17 @@ function copyDir(src, dest) {
 function wrapShell(content, options = {}) {
   const shell = readTemplate("shell.html");
   const root = options.root || ".";
+  const title = options.title || `${SITE_TITLE}:~$`;
+  const description = options.description || SITE_DESCRIPTION;
+  const canonical = options.canonical || SITE_URL;
+  const ogType = options.ogType || "website";
   return shell
     .replace(/\{\{CONTENT\}\}/g, content)
-    .replace(/\{\{PAGE_TITLE\}\}/g, options.title || "lizard@web:~$")
+    .replace(/\{\{PAGE_TITLE\}\}/g, title)
+    .replace(/\{\{META_DESCRIPTION\}\}/g, escapeHtml(description))
+    .replace(/\{\{CANONICAL\}\}/g, canonical)
+    .replace(/\{\{OG_TITLE\}\}/g, escapeHtml(title))
+    .replace(/\{\{OG_TYPE\}\}/g, ogType)
     .replace(/\{\{ROOT\}\}/g, root)
     .replace(/\{\{NAV_BLOG\}\}/g, options.nav === "blog" ? "active" : "")
     .replace(/\{\{NAV_ABOUT\}\}/g, options.nav === "about" ? "active" : "")
@@ -269,6 +324,63 @@ function wrapShell(content, options = {}) {
       options.nav === "projects" ? "active" : "",
     )
     .replace(/\{\{STATUS_FILE\}\}/g, options.statusFile || "index.html");
+}
+
+/** RSS 2.0 feed */
+function buildRss(posts) {
+  const items = posts
+    .map((p) => {
+      const link = `${SITE_URL}/posts/${p.slug}.html`;
+      const pubDate = new Date(`${p.date}T00:00:00Z`).toUTCString();
+      return `    <item>
+      <title>${escapeHtml(p.title)}</title>
+      <link>${link}</link>
+      <guid isPermaLink="true">${link}</guid>
+      <pubDate>${pubDate}</pubDate>
+      <description>${escapeHtml(p.excerpt || "")}</description>
+${(p.tags || []).map((t) => `      <category>${escapeHtml(t)}</category>`).join("\n")}
+    </item>`;
+    })
+    .join("\n");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>${escapeHtml(SITE_TITLE)}</title>
+    <link>${SITE_URL}</link>
+    <atom:link href="${SITE_URL}/feed.xml" rel="self" type="application/rss+xml" />
+    <description>${escapeHtml(SITE_DESCRIPTION)}</description>
+    <language>en</language>
+    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+${items}
+  </channel>
+</rss>
+`;
+}
+
+/** sitemap.xml */
+function buildSitemap(posts) {
+  const today = new Date().toISOString().slice(0, 10);
+  const urls = [
+    { loc: `${SITE_URL}/`, lastmod: today, priority: "1.0" },
+    { loc: `${SITE_URL}/about.html`, lastmod: today, priority: "0.6" },
+    { loc: `${SITE_URL}/projects.html`, lastmod: today, priority: "0.6" },
+    ...posts.map((p) => ({
+      loc: `${SITE_URL}/posts/${p.slug}.html`,
+      lastmod: p.date,
+      priority: "0.8",
+    })),
+  ];
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls
+  .map(
+    (u) =>
+      `  <url><loc>${u.loc}</loc><lastmod>${u.lastmod}</lastmod><priority>${u.priority}</priority></url>`,
+  )
+  .join("\n")}
+</urlset>
+`;
 }
 
 // ─── Build ────────────────────────────────────────────────────
@@ -315,7 +427,17 @@ function build() {
     .filter((p) => !p.draft)
     .sort((a, b) => b.date.localeCompare(a.date));
 
-  const allSlugs = publishedPosts.map((p) => p.slug);
+  // Build a title→slug index so wikilinks resolve by post title, not filename.
+  const titleIndex = {
+    byTitle: {},
+    bySlugifiedTitle: {},
+    bySlug: {},
+  };
+  for (const p of publishedPosts) {
+    titleIndex.byTitle[p.title] = p.slug;
+    titleIndex.bySlugifiedTitle[slugify(p.title)] = p.slug;
+    titleIndex.bySlug[p.slug] = p.slug;
+  }
 
   console.log(
     `  Found ${publishedPosts.length} post(s), ${posts.length - publishedPosts.length} draft(s)`,
@@ -334,7 +456,7 @@ function build() {
     );
 
     // Resolve Obsidian wikilinks
-    bodyHtml = resolveWikilinks(bodyHtml, allSlugs);
+    bodyHtml = resolveWikilinks(bodyHtml, titleIndex);
 
     // Generate TOC from original markdown
     const tocHtml = generateToc(post.body);
@@ -352,7 +474,11 @@ function build() {
       .replace(/\{\{ROOT\}\}/g, "..");
 
     const page = wrapShell(content, {
-      title: `${post.title} — lizard@web`,
+      title: `${post.title} — ${SITE_TITLE}`,
+      description:
+        post.excerpt || stripHtml(bodyHtml).slice(0, 160) || SITE_DESCRIPTION,
+      canonical: `${SITE_URL}/posts/${post.slug}.html`,
+      ogType: "article",
       nav: "blog",
       root: "..",
       statusFile: `posts/${post.slug}.md`,
@@ -392,7 +518,9 @@ function build() {
 
   const homeContent = homeTemplate.replace("{{POST_LIST}}", postListHtml);
   const homePage = wrapShell(homeContent, {
-    title: "lizard@web:~$ — blog",
+    title: `${SITE_TITLE}:~$ — blog`,
+    description: SITE_DESCRIPTION,
+    canonical: `${SITE_URL}/`,
     nav: "blog",
     root: ".",
     statusFile: "index.html",
@@ -408,7 +536,9 @@ function build() {
 
   const aboutContent = aboutTemplate.replace("{{ABOUT_BODY}}", aboutHtml);
   const aboutPage = wrapShell(aboutContent, {
-    title: "About — lizard@web",
+    title: `About — ${SITE_TITLE}`,
+    description: `About ${SITE_AUTHOR} — ${SITE_DESCRIPTION}`,
+    canonical: `${SITE_URL}/about.html`,
     nav: "about",
     root: ".",
     statusFile: "about.html",
@@ -430,13 +560,31 @@ function build() {
     projectsHtml,
   );
   const projectsPage = wrapShell(projectsContent, {
-    title: "Projects — lizard@web",
+    title: `Projects — ${SITE_TITLE}`,
+    description: `Projects by ${SITE_AUTHOR}`,
+    canonical: `${SITE_URL}/projects.html`,
     nav: "projects",
     root: ".",
     statusFile: "projects.html",
   });
   fs.writeFileSync(path.join(DIST_DIR, "projects.html"), projectsPage);
   console.log("  ✓ projects.html");
+
+  // ── Feeds & discovery ──────────────────────────────────
+  fs.writeFileSync(path.join(DIST_DIR, "feed.xml"), buildRss(publishedPosts));
+  console.log("  ✓ feed.xml");
+
+  fs.writeFileSync(
+    path.join(DIST_DIR, "sitemap.xml"),
+    buildSitemap(publishedPosts),
+  );
+  console.log("  ✓ sitemap.xml");
+
+  fs.writeFileSync(
+    path.join(DIST_DIR, "robots.txt"),
+    `User-agent: *\nAllow: /\nSitemap: ${SITE_URL}/sitemap.xml\n`,
+  );
+  console.log("  ✓ robots.txt");
 
   console.log("\x1b[32m✔ Build complete → dist/\x1b[0m");
 }

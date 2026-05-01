@@ -17,8 +17,10 @@
     --purple: #ae81ff;
     --blue: #66d9ef;
     --text: #c9d1d9;
-    --text-dim: #6e7681;
+    --text-dim: #8b949e;
+    --text-mute: #6e7681;
     --border: #21262d;
+    --status-bar-h: 28px;
     --font-mono:
         "JetBrains Mono", "Fira Code", "Cascadia Code", "Source Code Pro",
         monospace;
@@ -39,41 +41,72 @@ body {
     background: var(--bg);
     color: var(--text);
     font-family: var(--font-mono);
-    font-size: 14px;
+    font-size: 15px;
     line-height: 1.7;
     min-height: 100vh;
     overflow-x: hidden;
-    padding-bottom: 2rem;
+    padding-bottom: calc(var(--status-bar-h) + 2rem + env(safe-area-inset-bottom));
 }
 
-/* === SCANLINE OVERLAY === */
-body::after {
-    content: "";
-    position: fixed;
-    inset: 0;
-    background: repeating-linear-gradient(
-        0deg,
-        transparent,
-        transparent 2px,
-        rgba(0, 255, 156, 0.015) 2px,
-        rgba(0, 255, 156, 0.015) 4px
-    );
-    pointer-events: none;
-    z-index: 9999;
+/* Skip link — invisible until keyboard-focused */
+.skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    background: var(--green);
+    color: var(--bg);
+    padding: 0.4rem 0.8rem;
+    font-weight: 700;
+    z-index: 10000;
+}
+.skip-link:focus {
+    left: 1rem;
+    top: 1rem;
 }
 
-/* === CRT VIGNETTE === */
-body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    background: radial-gradient(
-        ellipse at center,
-        transparent 50%,
-        rgba(0, 0, 0, 0.5) 100%
-    );
-    pointer-events: none;
-    z-index: 9998;
+/* Focus ring — terminal-native: green underline + glow, never default browser blue */
+:focus-visible {
+    outline: 2px solid var(--green);
+    outline-offset: 2px;
+    border-radius: 2px;
+    box-shadow: 0 0 12px var(--green-glow);
+}
+a:focus-visible {
+    color: var(--green);
+    text-shadow: 0 0 8px var(--green-glow);
+}
+
+/* === SCANLINE OVERLAY ===
+   Suppressed for users who prefer reduced motion or higher contrast — the
+   overlay reduces text contrast even though it's subtle. */
+@media (prefers-reduced-motion: no-preference) and (prefers-contrast: no-preference) {
+    body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background: repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 2px,
+            rgba(0, 255, 156, 0.015) 2px,
+            rgba(0, 255, 156, 0.015) 4px
+        );
+        pointer-events: none;
+        z-index: 9999;
+    }
+
+    body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background: radial-gradient(
+            ellipse at center,
+            transparent 50%,
+            rgba(0, 0, 0, 0.5) 100%
+        );
+        pointer-events: none;
+        z-index: 9998;
+    }
 }
 
 ::selection {
@@ -84,7 +117,11 @@ body::before {
 a {
     color: var(--green);
     text-decoration: none;
-    transition: all 0.2s;
+    transition:
+        color 0.2s,
+        text-shadow 0.2s,
+        background 0.2s,
+        border-color 0.2s;
 }
 a:hover {
     color: #fff;
@@ -176,7 +213,9 @@ a:hover {
     padding: 0.25rem 0.6rem;
     border-radius: 3px;
     font-size: 13px;
-    transition: all 0.2s;
+    transition:
+        color 0.2s,
+        background 0.2s;
     position: relative;
 }
 .nav a:hover,
@@ -320,13 +359,18 @@ a:hover {
     border-radius: 6px;
     margin-bottom: 1rem;
     background: var(--bg-card);
-    transition: all 0.25s;
+    transition:
+        border-color 0.25s,
+        background 0.25s,
+        box-shadow 0.25s,
+        transform 0.25s;
     overflow: hidden;
 }
 .post-item:hover {
     border-color: var(--green-dim);
     background: var(--bg-hover);
     box-shadow: 0 0 20px rgba(0, 255, 156, 0.05);
+    transform: translateY(-1px);
 }
 .post-link {
     display: block;
@@ -425,9 +469,16 @@ a:hover {
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: 6px;
-    padding: 2rem;
+    padding: 2rem 2.5rem;
     margin-top: 1rem;
-    line-height: 1.9;
+    line-height: 1.85;
+    /* Reading-width constraint — monospace at this size lands ~70-80ch sweet-spot */
+    max-width: 76ch;
+}
+/* When there's no TOC sidebar, center the body so it doesn't drift left */
+.section > .post-body {
+    margin-left: auto;
+    margin-right: auto;
 }
 .post-body h2 {
     color: var(--green);
@@ -586,7 +637,9 @@ a:hover {
     padding: 0.15rem 0;
     border-left: 2px solid transparent;
     padding-left: 0.6rem;
-    transition: all 0.2s;
+    transition:
+        color 0.2s,
+        border-left-color 0.2s;
 }
 .toc-list li a:hover {
     color: var(--green);
@@ -602,10 +655,14 @@ a:hover {
     font-size: 11px;
 }
 
-/* Hide TOC sidebar on narrow screens */
-@media (max-width: 768px) {
+/* Hide TOC sidebar on narrow screens — bumped from 768 because the
+   body+TOC grid felt cramped between 800-900px. */
+@media (max-width: 900px) {
     .post-layout {
         grid-template-columns: 1fr;
+    }
+    .post-layout .post-body {
+        max-width: none;
     }
     .toc {
         position: relative;
@@ -699,5 +756,28 @@ a:hover {
     }
     .window-title {
         font-size: 10px;
+    }
+    .hero-ascii {
+        display: none;
+    }
+}
+
+/* === REDUCED MOTION ===
+   Honor the OS preference. The aesthetic survives without typing reveals. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+    .hero-line {
+        opacity: 1;
+    }
+    .cursor {
+        animation: none;
+        opacity: 1;
     }
 }
