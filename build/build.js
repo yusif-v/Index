@@ -68,7 +68,13 @@ function parseFrontmatter(content) {
  *  Resolution order: exact title match → slugified-title match → filename slug.
  *  This way `[[My Post Title]]` resolves regardless of how the file is named. */
 function resolveWikilinks(html, titleIndex) {
-  return html.replace(
+  // Mask code blocks/spans so `[[example]]` shown as a literal in docs is left alone.
+  const stash = [];
+  const masked = html.replace(/<(pre|code)\b[^>]*>[\s\S]*?<\/\1>/g, (m) => {
+    const i = stash.push(m) - 1;
+    return `\x00WL${i}\x00`;
+  });
+  const resolved = masked.replace(
     /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,
     (match, target, display) => {
       const key = target.trim();
@@ -77,25 +83,44 @@ function resolveWikilinks(html, titleIndex) {
         titleIndex.byTitle[key] ||
         titleIndex.bySlugifiedTitle[slugify(key)] ||
         (titleIndex.bySlug[slugify(key)] ? slugify(key) : null);
-      if (slug) return `<a href="./posts/${slug}.html">${text}</a>`;
-      return `<span class="comment">${text}</span>`;
+      if (slug) return `<a href="./posts/${slug}.html">${escapeHtml(text)}</a>`;
+      return `<span class="wikilink-broken" title="unresolved wikilink: ${escapeHtml(key)}">${escapeHtml(text)}</span>`;
     },
   );
+  return resolved.replace(/\x00WL(\d+)\x00/g, (m, i) => stash[+i]);
 }
 
 /** Convert markdown to HTML (lightweight, no dependencies) */
 function markdownToHtml(md) {
   let html = md;
 
+  // Mask code blocks/spans with placeholders BEFORE any line-based regex runs.
+  // Otherwise patterns like `^---$` (hr), `^1. ` (ol), `^# ` (heading),
+  // `[[wiki]]`, `**bold**`, `*it*` etc. mangle content inside code samples.
+  // Restored at the end of this function.
+  const codeStash = [];
+  // Block placeholder masquerades as a block tag so paragraph-wrap leaves it alone.
+  // Inline placeholder masquerades as inline so it sits inside <p>.
+  const stashBlock = (rendered) => {
+    const i = codeStash.push(rendered) - 1;
+    return `\n\n<pre data-stash="${i}"></pre>\n\n`;
+  };
+  const stashInline = (rendered) => {
+    const i = codeStash.push(rendered) - 1;
+    return `<code data-stash="${i}"></code>`;
+  };
+
   // Fenced code blocks (```lang ... ```)
   html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
-    const escaped = escapeHtml(code.trimEnd());
+    const escaped = escapeHtml(code.replace(/\n$/, ""));
     const langClass = lang ? ` class="language-${lang}"` : "";
-    return `<pre><code${langClass}>${escaped}</code></pre>`;
+    return stashBlock(`<pre><code${langClass}>${escaped}</code></pre>`);
   });
 
-  // Inline code (but not inside <pre>)
-  html = html.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+  // Inline code — escape contents (so `<code>` inside doesn't get re-parsed as HTML)
+  html = html.replace(/`([^`\n]+)`/g, (m, code) =>
+    stashInline(`<code>${escapeHtml(code)}</code>`),
+  );
 
   // Images ![alt](src)
   html = html.replace(
@@ -219,6 +244,9 @@ function markdownToHtml(md) {
     })
     .join("\n\n");
 
+  // Restore stashed code placeholders.
+  html = html.replace(/<(pre|code) data-stash="(\d+)"><\/\1>/g, (m, _t, i) => codeStash[+i]);
+
   return html;
 }
 
@@ -312,30 +340,47 @@ function copyDir(src, dest) {
   }
 }
 
+/** Render a `{{TOKEN}}` template against a values map.
+ *  Uses the callback form of `String.replace` so values containing `$&`, `$1`,
+ *  etc. (e.g. inside post bodies) are inserted verbatim instead of being
+ *  interpreted as backreferences. */
+function renderTemplate(template, values) {
+  return template.replace(/\{\{(\w+)\}\}/g, (m, key) =>
+    Object.prototype.hasOwnProperty.call(values, key) ? String(values[key]) : m,
+  );
+}
+
 /** Wrap content in shell template */
 function wrapShell(content, options = {}) {
   const shell = readTemplate("shell.html");
-  const root = options.root || ".";
   const title = options.title || `${SITE_TITLE}:~$`;
   const description = options.description || SITE_DESCRIPTION;
   const canonical = options.canonical || SITE_URL;
-  const ogType = options.ogType || "website";
-  return shell
-    .replace(/\{\{CONTENT\}\}/g, content)
-    .replace(/\{\{PAGE_TITLE\}\}/g, title)
-    .replace(/\{\{META_DESCRIPTION\}\}/g, escapeHtml(description))
-    .replace(/\{\{CANONICAL\}\}/g, canonical)
-    .replace(/\{\{OG_TITLE\}\}/g, escapeHtml(title))
-    .replace(/\{\{OG_TYPE\}\}/g, ogType)
-    .replace(/\{\{ROOT\}\}/g, root)
-    .replace(/\{\{NAV_BLOG\}\}/g, options.nav === "blog" ? "active" : "")
-    .replace(/\{\{NAV_CTF\}\}/g, options.nav === "ctf" ? "active" : "")
-    .replace(/\{\{NAV_ABOUT\}\}/g, options.nav === "about" ? "active" : "")
-    .replace(
-      /\{\{NAV_PROJECTS\}\}/g,
-      options.nav === "projects" ? "active" : "",
-    )
-    .replace(/\{\{STATUS_FILE\}\}/g, options.statusFile || "index.html");
+  return renderTemplate(shell, {
+    CONTENT: content,
+    PAGE_TITLE: escapeHtml(title),
+    META_DESCRIPTION: escapeHtml(description),
+    CANONICAL: canonical,
+    OG_TITLE: escapeHtml(title),
+    OG_TYPE: options.ogType || "website",
+    OG_IMAGE: options.ogImage || `${SITE_URL}/static/og.svg`,
+    ROOT: options.root || ".",
+    NAV_BLOG: options.nav === "blog" ? "active" : "",
+    NAV_CTF: options.nav === "ctf" ? "active" : "",
+    NAV_ABOUT: options.nav === "about" ? "active" : "",
+    NAV_PROJECTS: options.nav === "projects" ? "active" : "",
+    STATUS_FILE: options.statusFile || "index.html",
+  });
+}
+
+/** Estimate reading time in minutes for a markdown body. 220 wpm is typical
+ *  for tech reading; code blocks are excluded since they're scanned not read. */
+function readingTime(markdown) {
+  const stripped = markdown
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/`[^`]*`/g, "");
+  const words = stripped.trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(1, Math.round(words / 220));
 }
 
 /** RSS 2.0 feed */
@@ -608,13 +653,17 @@ function build() {
       .map((t) => `<span class="post-tag">${t}</span>`)
       .join("\n        ");
 
-    const content = postTemplate
-      .replace(/\{\{SLUG\}\}/g, post.slug)
-      .replace(/\{\{DATE\}\}/g, post.date)
-      .replace(/\{\{TAGS_HTML\}\}/g, tagsHtml)
-      .replace(/\{\{BODY\}\}/g, bodyHtml)
-      .replace(/\{\{TOC\}\}/g, tocHtml)
-      .replace(/\{\{ROOT\}\}/g, "..");
+    const minutes = readingTime(post.body);
+    const content = renderTemplate(postTemplate, {
+      SLUG: post.slug,
+      DATE: post.date,
+      TAGS_HTML: tagsHtml,
+      BODY: bodyHtml,
+      TOC: tocHtml,
+      ROOT: "..",
+      READING_TIME: `${minutes} min read`,
+      TITLE: escapeHtml(post.title),
+    });
 
     const page = wrapShell(content, {
       title: `${post.title} — ${SITE_TITLE}`,
@@ -642,7 +691,7 @@ function build() {
     postListHtml = renderPostList(publishedPosts, ".");
   }
 
-  const homeContent = homeTemplate.replace("{{POST_LIST}}", postListHtml);
+  const homeContent = renderTemplate(homeTemplate, { POST_LIST: postListHtml });
   const homePage = wrapShell(homeContent, {
     title: `${SITE_TITLE}:~$ — blog`,
     description: SITE_DESCRIPTION,
@@ -660,7 +709,7 @@ function build() {
   const { body: aboutBody } = parseFrontmatter(aboutMd);
   const aboutHtml = markdownToHtml(aboutBody);
 
-  const aboutContent = aboutTemplate.replace("{{ABOUT_BODY}}", aboutHtml);
+  const aboutContent = renderTemplate(aboutTemplate, { ABOUT_BODY: aboutHtml });
   const aboutPage = wrapShell(aboutContent, {
     title: `About — ${SITE_TITLE}`,
     description: `About ${SITE_AUTHOR} — ${SITE_DESCRIPTION}`,
@@ -681,10 +730,9 @@ function build() {
   const { body: projectsBody } = parseFrontmatter(projectsMd);
   const projectsHtml = markdownToHtml(projectsBody);
 
-  const projectsContent = projectsTemplate.replace(
-    "{{PROJECTS_BODY}}",
-    projectsHtml,
-  );
+  const projectsContent = renderTemplate(projectsTemplate, {
+    PROJECTS_BODY: projectsHtml,
+  });
   const projectsPage = wrapShell(projectsContent, {
     title: `Projects — ${SITE_TITLE}`,
     description: `Projects by ${SITE_AUTHOR}`,
@@ -703,9 +751,10 @@ function build() {
     htbPosts.length === 0
       ? '<li class="post-no-results"><span class="prompt">$</span> No writeups yet.</li>'
       : renderPostList(htbPosts, ".");
-  const ctfContent = ctfTemplate
-    .replace("{{CTF_LIST}}", ctfList)
-    .replace("{{CTF_COUNT}}", String(htbPosts.length));
+  const ctfContent = renderTemplate(ctfTemplate, {
+    CTF_LIST: ctfList,
+    CTF_COUNT: String(htbPosts.length),
+  });
   const ctfPage = wrapShell(ctfContent, {
     title: `Writeups — ${SITE_TITLE}`,
     description: `HackTheBox writeups by ${SITE_AUTHOR}.`,
@@ -732,6 +781,52 @@ function build() {
     `User-agent: *\nAllow: /\nSitemap: ${SITE_URL}/sitemap.xml\n`,
   );
   console.log("  ✓ robots.txt");
+
+  // ── 404 page (GitHub Pages serves /404.html for missing routes) ─
+  const notFoundContent = `
+    <section class="section page-enter">
+      <div class="section-header">
+        <span class="prompt">lizard@web:~$</span>
+        <span class="cmd">cat</span>
+        <span class="flag">${escapeHtml(SITE_TITLE)}/$_PATH</span>
+      </div>
+      <div class="post-body" style="max-width:none">
+        <pre style="background:none;border:none;padding:0;margin:0;color:var(--red);">cat: $_PATH: No such file or directory</pre>
+        <p style="margin-top:1rem;color:var(--text-dim)">The page you're looking for either moved, never existed, or got <em>rm -rf</em>'d. Pick a known-good path:</p>
+        <ul>
+          <li><a href="/">~/posts</a> — the blog index</li>
+          <li><a href="/ctf.html">~/writeups</a> — HTB writeups</li>
+          <li><a href="/about.html">~/about</a></li>
+          <li><a href="/projects.html">~/projects</a></li>
+        </ul>
+      </div>
+    </section>
+  `;
+  const notFoundPage = wrapShell(notFoundContent, {
+    title: `404 — ${SITE_TITLE}`,
+    description: "Page not found.",
+    canonical: `${SITE_URL}/404.html`,
+    nav: "",
+    root: ".",
+    statusFile: "404.html",
+  });
+  fs.writeFileSync(path.join(DIST_DIR, "404.html"), notFoundPage);
+  console.log("  ✓ 404.html");
+
+  // ── Open Graph image (SVG, no deps) ────────────────────
+  const og = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#0a0e14"/>
+  <g font-family="JetBrains Mono, monospace" fill="#00ff9c">
+    <text x="80" y="180" font-size="72" font-weight="700">lizard@web:~$ _</text>
+    <text x="80" y="290" font-size="36" fill="#c9d1d9">${escapeHtml(SITE_DESCRIPTION)}</text>
+    <text x="80" y="540" font-size="24" fill="#8b949e">${escapeHtml(SITE_URL.replace(/^https?:\/\//, ""))}</text>
+  </g>
+</svg>
+`;
+  ensureDir(path.join(DIST_DIR, "static"));
+  fs.writeFileSync(path.join(DIST_DIR, "static", "og.svg"), og);
+  console.log("  ✓ static/og.svg");
 
   console.log("\x1b[32m✔ Build complete → dist/\x1b[0m");
 }

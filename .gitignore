@@ -16,3 +16,6 @@ _drafts/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Playwright MCP scratch
+.playwright-mcp/

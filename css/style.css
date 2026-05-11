@@ -45,7 +45,7 @@ body {
     line-height: 1.7;
     min-height: 100vh;
     overflow-x: hidden;
-    padding-bottom: calc(var(--status-bar-h) + 2rem + env(safe-area-inset-bottom));
+    padding-bottom: calc(var(--status-bar-h) + 1.5rem + env(safe-area-inset-bottom));
 }
 
 /* Skip link — invisible until keyboard-focused */
@@ -287,6 +287,13 @@ a:hover {
     color: var(--text-dim);
     font-style: italic;
 }
+/* Wikilink with no matching post — show inline so the reader knows the link
+   target is missing, but don't draw too much attention. */
+.wikilink-broken {
+    color: var(--text-dim);
+    border-bottom: 1px dashed var(--text-mute);
+    cursor: help;
+}
 .output {
     color: var(--text);
     padding-left: 1.5rem;
@@ -479,6 +486,22 @@ a:hover {
 .section > .post-body {
     margin-left: auto;
     margin-right: auto;
+}
+.post-h1 {
+    color: #fff;
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0.5rem 0 0.8rem;
+    letter-spacing: -0.3px;
+}
+.post-reading {
+    color: var(--cyan);
+}
+/* Anchored headings should clear the sticky window-bar when scrolled to */
+.post-body h2,
+.post-body h3,
+.post-body h4 {
+    scroll-margin-top: 70px;
 }
 .post-body h2 {
     color: var(--green);
@@ -699,20 +722,27 @@ a:hover {
     margin-top: 0.5rem;
 }
 
-/* === STATUS BAR === */
+/* === STATUS BAR ===
+   Height is locked to --status-bar-h so body padding-bottom matches exactly.
+   Without this, padding (0.3rem + 11px font + 0.3rem) drifted with the user's
+   default font size and the footer could be obscured. */
 .status-bar {
     background: var(--bg-panel);
     border-top: 1px solid var(--border);
-    padding: 0.3rem 1rem;
+    padding: 0 1rem;
+    height: var(--status-bar-h);
     display: flex;
+    align-items: center;
     justify-content: space-between;
     font-size: 11px;
+    line-height: 1;
     color: var(--text-dim);
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
     z-index: 100;
+    padding-bottom: env(safe-area-inset-bottom);
 }
 .status-bar .status-mode {
     background: var(--green);
@@ -912,6 +942,13 @@ a:hover {
 @media (max-width: 600px) {
     body {
         font-size: 13px;
+    }
+    .nav a {
+        padding: 0.5rem 0.7rem;
+        font-size: 13px;
+    }
+    .nav-sep {
+        display: none;
     }
     .hero-ascii {
         font-size: 7px;
