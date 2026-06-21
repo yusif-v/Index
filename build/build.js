@@ -367,6 +367,7 @@ function wrapShell(content, options = {}) {
     ROOT: options.root || ".",
     NAV_BLOG: options.nav === "blog" ? "active" : "",
     NAV_CTF: options.nav === "ctf" ? "active" : "",
+    NAV_QUIZ: options.nav === "quiz" ? "active" : "",
     NAV_ABOUT: options.nav === "about" ? "active" : "",
     NAV_PROJECTS: options.nav === "projects" ? "active" : "",
     STATUS_FILE: options.statusFile || "index.html",
@@ -421,6 +422,7 @@ function buildSitemap(posts) {
   const urls = [
     { loc: `${SITE_URL}/`, lastmod: today, priority: "1.0" },
     { loc: `${SITE_URL}/ctf.html`, lastmod: today, priority: "0.7" },
+    { loc: `${SITE_URL}/quiz.html`, lastmod: today, priority: "0.7" },
     { loc: `${SITE_URL}/about.html`, lastmod: today, priority: "0.6" },
     { loc: `${SITE_URL}/projects.html`, lastmod: today, priority: "0.6" },
     ...posts.map((p) => ({
@@ -766,6 +768,26 @@ function build() {
   fs.writeFileSync(path.join(DIST_DIR, "ctf.html"), ctfPage);
   console.log(`  ✓ ctf.html (${htbPosts.length} writeup${htbPosts.length === 1 ? "" : "s"})`);
 
+  // ── Build quiz page ────────────────────────────────────
+  const quizTemplate = readTemplate("quiz.html");
+  const quizPage = wrapShell(quizTemplate, {
+    title: `Quiz — ${SITE_TITLE}`,
+    description: `SecAI+ quiz — 180 questions.`,
+    canonical: `${SITE_URL}/quiz.html`,
+    nav: "quiz",
+    root: ".",
+    statusFile: "quiz.html",
+  });
+  fs.writeFileSync(path.join(DIST_DIR, "quiz.html"), quizPage);
+  console.log("  ✓ quiz.html");
+
+  // Copy questions.enc into dist
+  const encSrc = path.join(ROOT_DIR, "quiz", "questions.enc");
+  if (fs.existsSync(encSrc)) {
+    fs.copyFileSync(encSrc, path.join(DIST_DIR, "questions.enc"));
+    console.log("  ✓ questions.enc");
+  }
+
   // ── Feeds & discovery ──────────────────────────────────
   fs.writeFileSync(path.join(DIST_DIR, "feed.xml"), buildRss(publishedPosts));
   console.log("  ✓ feed.xml");
@@ -796,6 +818,7 @@ function build() {
         <ul>
           <li><a href="/">~/posts</a> — the blog index</li>
           <li><a href="/ctf.html">~/writeups</a> — HTB writeups</li>
+          <li><a href="/quiz.html">~/quiz</a> — SecAI+ quiz</li>
           <li><a href="/about.html">~/about</a></li>
           <li><a href="/projects.html">~/projects</a></li>
         </ul>

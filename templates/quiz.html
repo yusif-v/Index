@@ -1,0 +1,325 @@
+<section class="section page-enter">
+    <div class="section-header">
+        <span class="prompt">lizard@web:~$</span>
+        <span class="cmd">./quiz</span>
+        <span class="flag">--exam=secai+</span>
+        <span class="comment"># 180 questions</span>
+    </div>
+
+    <!-- Decrypt screen -->
+    <div id="quiz-decrypt">
+        <div class="quiz-card">
+            <div class="quiz-card-title">🔐 SecAI+ Quiz</div>
+            <div class="quiz-card-sub">180 questions across 9 chapters. Enter the passphrase to begin.</div>
+            <div class="quiz-input-row">
+                <label for="quiz-passphrase" class="quiz-label">passphrase:</label>
+                <input id="quiz-passphrase" type="password" class="quiz-input" placeholder="enter passphrase..." autocomplete="off" />
+            </div>
+            <button id="quiz-decrypt-btn" class="quiz-btn" onclick="quizDecrypt()">decrypt &amp; start</button>
+            <div id="quiz-error" class="quiz-error"></div>
+        </div>
+    </div>
+
+    <!-- Mode select -->
+    <div id="quiz-mode" style="display:none">
+        <div class="quiz-card">
+            <div class="quiz-card-title">Quiz Mode</div>
+            <div class="quiz-card-sub" id="quiz-mode-info"></div>
+            <div class="quiz-mode-btns">
+                <button class="quiz-btn" onclick="quizStart('sequential')">sequential</button>
+                <button class="quiz-btn quiz-btn-alt" onclick="quizStart('random')">random</button>
+            </div>
+            <div class="quiz-known-hint" id="quiz-known-hint"></div>
+        </div>
+    </div>
+
+    <!-- Quiz screen -->
+    <div id="quiz-screen" style="display:none">
+        <div class="quiz-card">
+            <div class="quiz-progress">
+                <span id="quiz-counter"></span>
+                <div class="quiz-progress-bar"><div id="quiz-progress-fill" class="quiz-progress-fill"></div></div>
+                <span id="quiz-score"></span>
+            </div>
+            <div id="quiz-q-num" class="quiz-q-num"></div>
+            <div id="quiz-question" class="quiz-question"></div>
+            <div id="quiz-options" class="quiz-options"></div>
+            <div id="quiz-feedback" style="display:none">
+                <div id="quiz-result-icon" class="quiz-result-icon"></div>
+                <div id="quiz-result-text" class="quiz-result-text"></div>
+                <div id="quiz-explanation" class="quiz-explanation"></div>
+                <div class="quiz-actions">
+                    <button id="quiz-mark-known" class="quiz-btn quiz-btn-small quiz-btn-known" onclick="quizMarkKnown()">✓ mark as known</button>
+                    <button id="quiz-next-btn" class="quiz-btn quiz-btn-small" onclick="quizNext()">next →</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary screen -->
+    <div id="quiz-summary" style="display:none">
+        <div class="quiz-card quiz-summary-card">
+            <div class="quiz-card-title">Quiz Complete</div>
+            <div id="quiz-summary-stats" class="quiz-summary-stats"></div>
+            <div class="quiz-summary-actions">
+                <button class="quiz-btn" onclick="quizRestart()">restart</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+// ─── Crypto helpers (compatible with CryptoJS AES/PBKDF2) ───
+function bytesToHex(bytes) {
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function hexToBytes(hex) {
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < hex.length; i += 2) bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+    return bytes;
+}
+
+// Minimal SHA-1 for PBKDF2
+function sha1(msg) {
+    // Use SubtleCrypto via async — but we need sync for PBKDF2.
+    // Instead, we'll use a pure JS SHA-1 implementation.
+    return null; // placeholder — see below
+}
+
+// ─── We'll use Web Crypto API for PBKDF2 + AES-CBC ───
+// This is compatible with the Python cryptography library output
+// as long as we use the same parameters.
+
+const QUIZ_KEY = 'known_questions_v1';
+
+let quizData = null;
+let quizFiltered = null;
+let quizCurrent = 0;
+let quizCorrect = 0;
+let quizWrong = 0;
+let quizMode = 'sequential';
+let quizUserAnswer = '';
+let quizShowResult = false;
+let quizKnown = [];
+
+// Load known from localStorage
+try {
+    const stored = localStorage.getItem(QUIZ_KEY);
+    if (stored) quizKnown = JSON.parse(stored);
+} catch(e) {}
+
+function quizSaveKnown() {
+    localStorage.setItem(QUIZ_KEY, JSON.stringify(quizKnown));
+}
+
+function quizDecrypt() {
+    const passphrase = document.getElementById('quiz-passphrase').value;
+    const errorEl = document.getElementById('quiz-error');
+    const btn = document.getElementById('quiz-decrypt-btn');
+    errorEl.textContent = '';
+    btn.textContent = 'decrypting...';
+    btn.disabled = true;
+
+    fetch('questions.enc')
+        .then(r => {
+            if (!r.ok) throw new Error('Could not load questions file');
+            return r.arrayBuffer();
+        })
+        .then(buf => {
+            const bytes = new Uint8Array(buf);
+            const salt = bytes.slice(0, 16);
+            const iv = bytes.slice(16, 32);
+            const ciphertext = bytes.slice(32);
+
+            return crypto.subtle.importKey(
+                'raw', new TextEncoder().encode(passphrase), { name: 'PBKDF2' }, false, ['deriveKey']
+            ).then(keyMaterial => {
+                return crypto.subtle.deriveKey(
+                    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-1' },
+                    keyMaterial,
+                    { name: 'AES-CBC', length: 256 },
+                    false,
+                    ['decrypt']
+                );
+            }).then(aesKey => {
+                return crypto.subtle.decrypt({ name: 'AES-CBC', iv }, aesKey, ciphertext);
+            });
+        })
+        .then(plaintext => {
+            const jsonStr = new TextDecoder().decode(plaintext);
+            quizData = JSON.parse(jsonStr);
+            document.getElementById('quiz-decrypt').style.display = 'none';
+            document.getElementById('quiz-mode').style.display = '';
+            const filtered = quizData.filter(q => !quizKnown.includes(q.question_number));
+            document.getElementById('quiz-mode-info').textContent =
+                quizData.length + ' total · ' + filtered.length + ' remaining · ' + quizKnown.length + ' marked known';
+            document.getElementById('quiz-known-hint').textContent =
+                quizKnown.length > 0 ? 'Known questions are automatically skipped.' : '';
+        })
+        .catch(e => {
+            errorEl.textContent = '✗ wrong passphrase or corrupted file';
+            btn.textContent = 'decrypt & start';
+            btn.disabled = false;
+        });
+}
+
+function quizStart(mode) {
+    quizMode = mode;
+    quizFiltered = quizData.filter(q => !quizKnown.includes(q.question_number));
+    if (mode === 'random') {
+        for (let i = quizFiltered.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [quizFiltered[i], quizFiltered[j]] = [quizFiltered[j], quizFiltered[i]];
+        }
+    }
+    quizCurrent = 0;
+    quizCorrect = 0;
+    quizWrong = 0;
+
+    document.getElementById('quiz-mode').style.display = 'none';
+    document.getElementById('quiz-screen').style.display = '';
+
+    if (quizFiltered.length === 0) {
+        quizShowEmpty();
+    } else {
+        quizRenderQuestion();
+    }
+}
+
+function quizRenderQuestion() {
+    const q = quizFiltered[quizCurrent];
+    quizUserAnswer = '';
+    quizShowResult = false;
+
+    const total = quizFiltered.length;
+    const pct = Math.round((quizCurrent / total) * 100);
+
+    document.getElementById('quiz-counter').textContent = 'question ' + (quizCurrent + 1) + '/' + total;
+    document.getElementById('quiz-progress-fill').style.width = pct + '%';
+    document.getElementById('quiz-score').textContent = '✓' + quizCorrect + ' ✗' + quizWrong;
+    document.getElementById('quiz-q-num').textContent = 'Q' + q.question_number;
+    document.getElementById('quiz-question').textContent = q.question;
+
+    const optsEl = document.getElementById('quiz-options');
+    optsEl.innerHTML = '';
+    const keys = Object.keys(q.answers).sort();
+    keys.forEach(k => {
+        const div = document.createElement('div');
+        div.className = 'quiz-option';
+        div.id = 'opt-' + k;
+        div.innerHTML = '<span class="quiz-opt-key">' + k + '</span><span class="quiz-opt-val">' + q.answers[k] + '</span>';
+        div.onclick = function() { quizSelect(k); };
+        optsEl.appendChild(div);
+    });
+
+    document.getElementById('quiz-feedback').style.display = 'none';
+}
+
+function quizSelect(k) {
+    if (quizShowResult) return;
+    quizUserAnswer = k;
+    document.querySelectorAll('.quiz-option').forEach(el => el.classList.remove('quiz-option-selected'));
+    document.getElementById('opt-' + k).classList.add('quiz-option-selected');
+
+    // Auto-submit on select
+    quizSubmit();
+}
+
+function quizSubmit() {
+    if (!quizUserAnswer || quizShowResult) return;
+    quizShowResult = true;
+
+    const q = quizFiltered[quizCurrent];
+    const correct = quizUserAnswer === q.correct_answer;
+
+    // Highlight correct/wrong
+    document.querySelectorAll('.quiz-option').forEach(el => el.classList.remove('quiz-option-selected'));
+    document.getElementById('opt-' + q.correct_answer).classList.add('quiz-option-correct');
+    if (!correct) {
+        document.getElementById('opt-' + quizUserAnswer).classList.add('quiz-option-wrong');
+    }
+
+    if (correct) {
+        quizCorrect++;
+        document.getElementById('quiz-result-icon').textContent = '✅';
+        document.getElementById('quiz-result-text').textContent = 'correct';
+        document.getElementById('quiz-result-text').className = 'quiz-result-text quiz-result-correct';
+    } else {
+        quizWrong++;
+        document.getElementById('quiz-result-icon').textContent = '❌';
+        document.getElementById('quiz-result-text').textContent = 'wrong — answer: ' + q.correct_answer;
+        document.getElementById('quiz-result-text').className = 'quiz-result-text quiz-result-wrong';
+    }
+
+    document.getElementById('quiz-explanation').textContent = q.explanation || '';
+    document.getElementById('quiz-feedback').style.display = '';
+    document.getElementById('quiz-score').textContent = '✓' + quizCorrect + ' ✗' + quizWrong;
+
+    // Update mark button
+    const markBtn = document.getElementById('quiz-mark-known');
+    if (quizKnown.includes(q.question_number)) {
+        markBtn.textContent = '✓ already known';
+        markBtn.disabled = true;
+    } else {
+        markBtn.textContent = '✓ mark as known';
+        markBtn.disabled = false;
+    }
+}
+
+function quizMarkKnown() {
+    const q = quizFiltered[quizCurrent];
+    if (!quizKnown.includes(q.question_number)) {
+        quizKnown.push(q.question_number);
+        quizSaveKnown();
+    }
+    quizNext();
+}
+
+function quizNext() {
+    quizCurrent++;
+    if (quizCurrent < quizFiltered.length) {
+        quizRenderQuestion();
+    } else {
+        quizShowSummary();
+    }
+}
+
+function quizShowSummary() {
+    document.getElementById('quiz-screen').style.display = 'none';
+    document.getElementById('quiz-summary').style.display = '';
+    const total = quizCorrect + quizWrong;
+    const pct = total > 0 ? ((quizCorrect / total) * 100).toFixed(1) : '0.0';
+    document.getElementById('quiz-summary-stats').innerHTML =
+        '<div class="quiz-stat"><span class="quiz-stat-val quiz-stat-correct">' + quizCorrect + '</span><span class="quiz-stat-label">correct</span></div>' +
+        '<div class="quiz-stat"><span class="quiz-stat-val quiz-stat-wrong">' + quizWrong + '</span><span class="quiz-stat-label">wrong</span></div>' +
+        '<div class="quiz-stat"><span class="quiz-stat-val">' + pct + '%</span><span class="quiz-stat-label">score</span></div>';
+}
+
+function quizShowEmpty() {
+    document.getElementById('quiz-screen').style.display = 'none';
+    document.getElementById('quiz-summary').style.display = '';
+    document.getElementById('quiz-summary-stats').innerHTML =
+        '<div class="quiz-card-sub">All questions marked as known. 🎉</div>' +
+        '<div class="quiz-card-sub">Clear localStorage to reset.</div>';
+}
+
+function quizRestart() {
+    quizData = null;
+    quizFiltered = null;
+    quizCurrent = 0;
+    quizCorrect = 0;
+    quizWrong = 0;
+    document.getElementById('quiz-passphrase').value = '';
+    document.getElementById('quiz-error').textContent = '';
+    document.getElementById('quiz-decrypt-btn').textContent = 'decrypt & start';
+    document.getElementById('quiz-decrypt-btn').disabled = false;
+    document.getElementById('quiz-summary').style.display = 'none';
+    document.getElementById('quiz-decrypt').style.display = '';
+}
+
+// Enter key to submit passphrase
+document.getElementById('quiz-passphrase').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') quizDecrypt();
+});
+</script>
