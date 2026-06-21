@@ -772,7 +772,7 @@ function build() {
   const quizTemplate = readTemplate("quiz.html");
   const quizPage = wrapShell(quizTemplate, {
     title: `Quiz — ${SITE_TITLE}`,
-    description: `SecAI+ quiz — 180 questions.`,
+    description: `Encrypted quiz — enter passphrase to begin.`,
     canonical: `${SITE_URL}/quiz.html`,
     nav: "quiz",
     root: ".",
@@ -818,7 +818,7 @@ function build() {
         <ul>
           <li><a href="/">~/posts</a> — the blog index</li>
           <li><a href="/ctf.html">~/writeups</a> — HTB writeups</li>
-          <li><a href="/quiz.html">~/quiz</a> — SecAI+ quiz</li>
+          <li><a href="/quiz.html">~/quiz</a></li>
           <li><a href="/about.html">~/about</a></li>
           <li><a href="/projects.html">~/projects</a></li>
         </ul>

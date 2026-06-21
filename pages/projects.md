@@ -27,7 +27,7 @@ Exam-agnostic terminal quiz bot. Loads JSON question files and drills you with a
 
 - **Repo:** [github.com/yusif-v/Quizterm](https://github.com/yusif-v/Quizterm)
 - **Stack:** Python, Rich
-- **Try it:** [quiz.html](/quiz.html) — SecAI+ 180-question quiz
+- **Try it:** [quiz.html](/quiz.html) — web quiz (passphrase required)
 
 ## 🌐 Web & Platforms
 
