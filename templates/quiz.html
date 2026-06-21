@@ -44,6 +44,9 @@
             <div id="quiz-q-num" class="quiz-q-num"></div>
             <div id="quiz-question" class="quiz-question"></div>
             <div id="quiz-options" class="quiz-options"></div>
+            <div id="quiz-submit-area" class="quiz-submit-area">
+                <button id="quiz-submit-btn" class="quiz-btn" onclick="quizSubmit()" disabled>submit answer</button>
+            </div>
             <div id="quiz-feedback" style="display:none">
                 <div id="quiz-result-icon" class="quiz-result-icon"></div>
                 <div id="quiz-result-text" class="quiz-result-text"></div>
@@ -69,28 +72,6 @@
 </section>
 
 <script>
-// ─── Crypto helpers (compatible with CryptoJS AES/PBKDF2) ───
-function bytesToHex(bytes) {
-    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-function hexToBytes(hex) {
-    const bytes = new Uint8Array(hex.length / 2);
-    for (let i = 0; i < hex.length; i += 2) bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
-    return bytes;
-}
-
-// Minimal SHA-1 for PBKDF2
-function sha1(msg) {
-    // Use SubtleCrypto via async — but we need sync for PBKDF2.
-    // Instead, we'll use a pure JS SHA-1 implementation.
-    return null; // placeholder — see below
-}
-
-// ─── We'll use Web Crypto API for PBKDF2 + AES-CBC ───
-// This is compatible with the Python cryptography library output
-// as long as we use the same parameters.
-
 const QUIZ_KEY = 'known_questions_v1';
 
 let quizData = null;
@@ -209,10 +190,20 @@ function quizRenderQuestion() {
         div.className = 'quiz-option';
         div.id = 'opt-' + k;
         div.innerHTML = '<span class="quiz-opt-key">' + k + '</span><span class="quiz-opt-val">' + q.answers[k] + '</span>';
-        div.onclick = function() { quizSelect(k); };
+        div.addEventListener('click', function() { quizSelect(k); });
+        // Mobile: also handle touch to avoid double-tap issues
+        div.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            quizSelect(k);
+        });
         optsEl.appendChild(div);
     });
 
+    // Reset submit button
+    const submitBtn = document.getElementById('quiz-submit-btn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'submit answer';
+    document.getElementById('quiz-submit-area').style.display = '';
     document.getElementById('quiz-feedback').style.display = 'none';
 }
 
@@ -222,8 +213,8 @@ function quizSelect(k) {
     document.querySelectorAll('.quiz-option').forEach(el => el.classList.remove('quiz-option-selected'));
     document.getElementById('opt-' + k).classList.add('quiz-option-selected');
 
-    // Auto-submit on select
-    quizSubmit();
+    // Enable submit button
+    document.getElementById('quiz-submit-btn').disabled = false;
 }
 
 function quizSubmit() {
@@ -256,9 +247,16 @@ function quizSubmit() {
     document.getElementById('quiz-feedback').style.display = '';
     document.getElementById('quiz-score').textContent = '✓' + quizCorrect + ' ✗' + quizWrong;
 
+    // Hide submit button after answering
+    document.getElementById('quiz-submit-area').style.display = 'none';
+
     // Update mark button
+    quizUpdateMarkButton(q.question_number);
+}
+
+function quizUpdateMarkButton(qNum) {
     const markBtn = document.getElementById('quiz-mark-known');
-    if (quizKnown.includes(q.question_number)) {
+    if (quizKnown.indexOf(qNum) !== -1) {
         markBtn.textContent = '✓ already known';
         markBtn.disabled = true;
     } else {
@@ -269,8 +267,9 @@ function quizSubmit() {
 
 function quizMarkKnown() {
     const q = quizFiltered[quizCurrent];
-    if (!quizKnown.includes(q.question_number)) {
-        quizKnown.push(q.question_number);
+    const qNum = q.question_number;
+    if (quizKnown.indexOf(qNum) === -1) {
+        quizKnown.push(qNum);
         quizSaveKnown();
     }
     quizNext();
