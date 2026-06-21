@@ -1054,10 +1054,11 @@ a:hover {
     transition: opacity 0.2s, box-shadow 0.2s;
 }
 .quiz-btn:hover { opacity: 0.85; }
-.quiz-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.quiz-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
 .quiz-btn-alt { background: var(--cyan); }
 .quiz-btn-small { font-size: 0.85rem; padding: 0.4rem 1rem; }
-.quiz-btn-known { background: var(--yellow); }
+.quiz-btn-known { background: var(--yellow); color: var(--bg); }
+.quiz-btn-known:disabled { opacity: 0.3; }
 .quiz-error {
     color: var(--red);
     margin-top: 0.75rem;
@@ -1262,7 +1263,7 @@ a:hover {
 .quiz-actions {
     display: flex;
     gap: 0.5rem;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
 }
 
 /* ── Summary ── */
@@ -1385,11 +1386,13 @@ a:hover {
         margin-bottom: 0.75rem;
     }
     .quiz-actions {
-        flex-direction: column;
-        gap: 0.4rem;
+        gap: 0.35rem;
     }
     .quiz-actions .quiz-btn-small {
-        width: 100%;
+        font-size: 0.75rem;
+        padding: 0.5rem 0.75rem;
+        min-height: 44px;
+        flex: 1;
     }
     .quiz-summary-stats {
         gap: 1rem;
