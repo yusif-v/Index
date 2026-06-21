@@ -1136,7 +1136,9 @@ a:hover {
     padding-top: 1rem;
     border-top: 1px solid var(--border);
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .quiz-btn-danger {
@@ -1149,7 +1151,24 @@ a:hover {
     opacity: 1;
 }
 
-/* ── Progress ── */
+/* ── Skip + mark ── */
+
+.quiz-skip-area {
+    margin-top: 0.75rem;
+}
+
+.quiz-btn-skip {
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+}
+.quiz-btn-skip:hover {
+    color: var(--yellow);
+    border-color: var(--yellow);
+    opacity: 1;
+}
+
+/* ── Submit ── */
 
 .quiz-progress {
     display: flex;
@@ -1387,6 +1406,9 @@ a:hover {
     }
     .quiz-mode-footer {
         justify-content: stretch;
+    }
+    .quiz-mode-footer .quiz-btn-small {
+        flex: 1;
     }
 }
 
