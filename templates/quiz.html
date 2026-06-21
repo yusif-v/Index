@@ -23,13 +23,29 @@
     <!-- Mode select -->
     <div id="quiz-mode" style="display:none">
         <div class="quiz-card">
-            <div class="quiz-card-title">Quiz Mode</div>
-            <div class="quiz-card-sub" id="quiz-mode-info"></div>
-            <div class="quiz-mode-btns">
-                <button class="quiz-btn" onclick="quizStart('sequential')">sequential</button>
-                <button class="quiz-btn quiz-btn-alt" onclick="quizStart('random')">random</button>
+            <div class="quiz-card-title">Select Mode</div>
+            <div class="quiz-mode-stats" id="quiz-mode-stats"></div>
+            <div class="quiz-mode-grid">
+                <button class="quiz-mode-btn" onclick="quizStart('all')">
+                    <span class="quiz-mode-btn-title">all</span>
+                    <span class="quiz-mode-btn-desc">every question, sequential</span>
+                </button>
+                <button class="quiz-mode-btn" onclick="quizStart('random30')">
+                    <span class="quiz-mode-btn-title">random 30</span>
+                    <span class="quiz-mode-btn-desc">30 random questions</span>
+                </button>
+                <button class="quiz-mode-btn" onclick="quizStart('unseen')">
+                    <span class="quiz-mode-btn-title">unseen</span>
+                    <span class="quiz-mode-btn-desc">skip known questions</span>
+                </button>
+                <button class="quiz-mode-btn" onclick="quizStart('review')">
+                    <span class="quiz-mode-btn-title">review known</span>
+                    <span class="quiz-mode-btn-desc">practice marked questions</span>
+                </button>
             </div>
-            <div class="quiz-known-hint" id="quiz-known-hint"></div>
+            <div class="quiz-mode-footer">
+                <button class="quiz-btn quiz-btn-small quiz-btn-danger" onclick="quizResetKnown()">✗ reset known</button>
+            </div>
         </div>
     </div>
 
@@ -65,7 +81,8 @@
             <div class="quiz-card-title">Quiz Complete</div>
             <div id="quiz-summary-stats" class="quiz-summary-stats"></div>
             <div class="quiz-summary-actions">
-                <button class="quiz-btn" onclick="quizRestart()">restart</button>
+                <button class="quiz-btn" onclick="quizBackToMode()">← change mode</button>
+                <button class="quiz-btn quiz-btn-alt" onclick="quizRestart()">restart</button>
             </div>
         </div>
     </div>
@@ -79,7 +96,7 @@ let quizFiltered = null;
 let quizCurrent = 0;
 let quizCorrect = 0;
 let quizWrong = 0;
-let quizMode = 'sequential';
+let quizMode = 'unseen';
 let quizUserAnswer = '';
 let quizShowResult = false;
 let quizKnown = [];
@@ -132,11 +149,7 @@ function quizDecrypt() {
             quizData = JSON.parse(jsonStr);
             document.getElementById('quiz-decrypt').style.display = 'none';
             document.getElementById('quiz-mode').style.display = '';
-            const filtered = quizData.filter(q => !quizKnown.includes(q.question_number));
-            document.getElementById('quiz-mode-info').textContent =
-                quizData.length + ' total · ' + filtered.length + ' remaining · ' + quizKnown.length + ' marked known';
-            document.getElementById('quiz-known-hint').textContent =
-                quizKnown.length > 0 ? 'Known questions are automatically skipped.' : '';
+            quizUpdateModeStats();
         })
         .catch(e => {
             errorEl.textContent = '✗ wrong passphrase or corrupted file';
@@ -145,36 +158,59 @@ function quizDecrypt() {
         });
 }
 
+function quizUpdateModeStats() {
+    const total = quizData.length;
+    const known = quizKnown.length;
+    const unseen = total - known;
+    document.getElementById('quiz-mode-stats').innerHTML =
+        '<span class="quiz-stat-pill">' + total + ' total</span>' +
+        '<span class="quiz-stat-pill quiz-stat-pill-green">' + unseen + ' unseen</span>' +
+        '<span class="quiz-stat-pill quiz-stat-pill-yellow">' + known + ' known</span>';
+}
+
 function quizStart(mode) {
     quizMode = mode;
-    quizFiltered = quizData.filter(q => !quizKnown.includes(q.question_number));
-    if (mode === 'random') {
-        for (let i = quizFiltered.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [quizFiltered[i], quizFiltered[j]] = [quizFiltered[j], quizFiltered[i]];
+    var filtered = [];
+
+    if (mode === 'all') {
+        filtered = quizData.slice();
+    } else if (mode === 'random30') {
+        var pool = quizData.slice();
+        var count = Math.min(30, pool.length);
+        for (var i = pool.length - 1; i > 0; i--) {
+            var j = Math.floor(Math.random() * (i + 1));
+            var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
         }
+        filtered = pool.slice(0, count);
+    } else if (mode === 'unseen') {
+        filtered = quizData.filter(function(q) { return quizKnown.indexOf(q.question_number) === -1; });
+    } else if (mode === 'review') {
+        filtered = quizData.filter(function(q) { return quizKnown.indexOf(q.question_number) !== -1; });
     }
+
+    if (filtered.length === 0) {
+        document.getElementById('quiz-mode').style.display = 'none';
+        quizShowEmpty();
+        return;
+    }
+
+    quizFiltered = filtered;
     quizCurrent = 0;
     quizCorrect = 0;
     quizWrong = 0;
 
     document.getElementById('quiz-mode').style.display = 'none';
     document.getElementById('quiz-screen').style.display = '';
-
-    if (quizFiltered.length === 0) {
-        quizShowEmpty();
-    } else {
-        quizRenderQuestion();
-    }
+    quizRenderQuestion();
 }
 
 function quizRenderQuestion() {
-    const q = quizFiltered[quizCurrent];
+    var q = quizFiltered[quizCurrent];
     quizUserAnswer = '';
     quizShowResult = false;
 
-    const total = quizFiltered.length;
-    const pct = Math.round((quizCurrent / total) * 100);
+    var total = quizFiltered.length;
+    var pct = Math.round((quizCurrent / total) * 100);
 
     document.getElementById('quiz-counter').textContent = 'question ' + (quizCurrent + 1) + '/' + total;
     document.getElementById('quiz-progress-fill').style.width = pct + '%';
@@ -182,25 +218,33 @@ function quizRenderQuestion() {
     document.getElementById('quiz-q-num').textContent = 'Q' + q.question_number;
     document.getElementById('quiz-question').textContent = q.question;
 
-    const optsEl = document.getElementById('quiz-options');
+    var optsEl = document.getElementById('quiz-options');
     optsEl.innerHTML = '';
-    const keys = Object.keys(q.answers).sort();
-    keys.forEach(k => {
-        const div = document.createElement('div');
+    var keys = Object.keys(q.answers).sort();
+    var lastTouch = 0;
+    keys.forEach(function(k) {
+        var div = document.createElement('div');
         div.className = 'quiz-option';
         div.id = 'opt-' + k;
         div.innerHTML = '<span class="quiz-opt-key">' + k + '</span><span class="quiz-opt-val">' + q.answers[k] + '</span>';
-        div.addEventListener('click', function() { quizSelect(k); });
-        // Mobile: also handle touch to avoid double-tap issues
-        div.addEventListener('touchend', function(e) {
-            e.preventDefault();
-            quizSelect(k);
-        });
+        div.addEventListener('click', (function(key) {
+            return function(e) {
+                var now = Date.now();
+                if (now - lastTouch < 500) return; // ignore click right after touch
+                quizSelect(key);
+            };
+        })(k));
+        div.addEventListener('touchend', (function(key) {
+            return function(e) {
+                e.preventDefault();
+                lastTouch = Date.now();
+                quizSelect(key);
+            };
+        })(k));
         optsEl.appendChild(div);
     });
 
-    // Reset submit button
-    const submitBtn = document.getElementById('quiz-submit-btn');
+    var submitBtn = document.getElementById('quiz-submit-btn');
     submitBtn.disabled = true;
     submitBtn.textContent = 'submit answer';
     document.getElementById('quiz-submit-area').style.display = '';
@@ -210,10 +254,8 @@ function quizRenderQuestion() {
 function quizSelect(k) {
     if (quizShowResult) return;
     quizUserAnswer = k;
-    document.querySelectorAll('.quiz-option').forEach(el => el.classList.remove('quiz-option-selected'));
+    document.querySelectorAll('.quiz-option').forEach(function(el) { el.classList.remove('quiz-option-selected'); });
     document.getElementById('opt-' + k).classList.add('quiz-option-selected');
-
-    // Enable submit button
     document.getElementById('quiz-submit-btn').disabled = false;
 }
 
@@ -221,11 +263,10 @@ function quizSubmit() {
     if (!quizUserAnswer || quizShowResult) return;
     quizShowResult = true;
 
-    const q = quizFiltered[quizCurrent];
-    const correct = quizUserAnswer === q.correct_answer;
+    var q = quizFiltered[quizCurrent];
+    var correct = quizUserAnswer === q.correct_answer;
 
-    // Highlight correct/wrong
-    document.querySelectorAll('.quiz-option').forEach(el => el.classList.remove('quiz-option-selected'));
+    document.querySelectorAll('.quiz-option').forEach(function(el) { el.classList.remove('quiz-option-selected'); });
     document.getElementById('opt-' + q.correct_answer).classList.add('quiz-option-correct');
     if (!correct) {
         document.getElementById('opt-' + quizUserAnswer).classList.add('quiz-option-wrong');
@@ -246,16 +287,13 @@ function quizSubmit() {
     document.getElementById('quiz-explanation').textContent = q.explanation || '';
     document.getElementById('quiz-feedback').style.display = '';
     document.getElementById('quiz-score').textContent = '✓' + quizCorrect + ' ✗' + quizWrong;
-
-    // Hide submit button after answering
     document.getElementById('quiz-submit-area').style.display = 'none';
 
-    // Update mark button
     quizUpdateMarkButton(q.question_number);
 }
 
 function quizUpdateMarkButton(qNum) {
-    const markBtn = document.getElementById('quiz-mark-known');
+    var markBtn = document.getElementById('quiz-mark-known');
     if (quizKnown.indexOf(qNum) !== -1) {
         markBtn.textContent = '✓ already known';
         markBtn.disabled = true;
@@ -266,8 +304,8 @@ function quizUpdateMarkButton(qNum) {
 }
 
 function quizMarkKnown() {
-    const q = quizFiltered[quizCurrent];
-    const qNum = q.question_number;
+    var q = quizFiltered[quizCurrent];
+    var qNum = q.question_number;
     if (quizKnown.indexOf(qNum) === -1) {
         quizKnown.push(qNum);
         quizSaveKnown();
@@ -287,8 +325,8 @@ function quizNext() {
 function quizShowSummary() {
     document.getElementById('quiz-screen').style.display = 'none';
     document.getElementById('quiz-summary').style.display = '';
-    const total = quizCorrect + quizWrong;
-    const pct = total > 0 ? ((quizCorrect / total) * 100).toFixed(1) : '0.0';
+    var total = quizCorrect + quizWrong;
+    var pct = total > 0 ? ((quizCorrect / total) * 100).toFixed(1) : '0.0';
     document.getElementById('quiz-summary-stats').innerHTML =
         '<div class="quiz-stat"><span class="quiz-stat-val quiz-stat-correct">' + quizCorrect + '</span><span class="quiz-stat-label">correct</span></div>' +
         '<div class="quiz-stat"><span class="quiz-stat-val quiz-stat-wrong">' + quizWrong + '</span><span class="quiz-stat-label">wrong</span></div>' +
@@ -298,9 +336,29 @@ function quizShowSummary() {
 function quizShowEmpty() {
     document.getElementById('quiz-screen').style.display = 'none';
     document.getElementById('quiz-summary').style.display = '';
+    var msg = '';
+    if (quizMode === 'unseen') {
+        msg = 'All questions marked as known. 🎉 Switch to "all" or "review known" mode to keep practicing.';
+    } else if (quizMode === 'review') {
+        msg = 'No questions marked as known yet. Practice some first!';
+    } else {
+        msg = 'No questions available.';
+    }
     document.getElementById('quiz-summary-stats').innerHTML =
-        '<div class="quiz-card-sub">All questions marked as known. 🎉</div>' +
-        '<div class="quiz-card-sub">Clear localStorage to reset.</div>';
+        '<div class="quiz-card-sub">' + msg + '</div>';
+}
+
+function quizBackToMode() {
+    document.getElementById('quiz-summary').style.display = 'none';
+    document.getElementById('quiz-mode').style.display = '';
+    quizUpdateModeStats();
+}
+
+function quizResetKnown() {
+    if (!confirm('Reset known questions? This will unmark all ' + quizKnown.length + ' questions.')) return;
+    quizKnown = [];
+    quizSaveKnown();
+    quizUpdateModeStats();
 }
 
 function quizRestart() {
@@ -317,7 +375,6 @@ function quizRestart() {
     document.getElementById('quiz-decrypt').style.display = '';
 }
 
-// Enter key to submit passphrase
 document.getElementById('quiz-passphrase').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') quizDecrypt();
 });
